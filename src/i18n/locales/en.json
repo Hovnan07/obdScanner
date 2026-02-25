@@ -1,0 +1,75 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "close": "Close",
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "readingVin": "Reading VIN...",
+    "myCar": "My Car"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "connection": "CONNECTION",
+    "engine": "Engine",
+    "battery": "Battery",
+    "errorLog": "Error log",
+    "brakePad": "Brake pad",
+    "abs": "ABS",
+    "ac": "AC",
+    "fuelRange": "Fuel range",
+    "speed": "Speed",
+    "rpm": "RPM",
+    "kmh": "km/h",
+    "status": "Status",
+    "on": "ON",
+    "off": "OFF",
+    "readRpm": "Read RPM",
+    "readSpeed": "Read Speed",
+    "diagnostic": "Diagnostic",
+    "troubleCodes": "TROUBLE CODES",
+    "rawResponse": "RAW RESPONSE",
+    "connectToStart": "Connect to OBD to start"
+  },
+  "modal": {
+    "invalidInput": "Invalid Input",
+    "invalidInputMsg": "Please enter a valid OBD Wi-Fi host and port.",
+    "connectionError": "Connection Error",
+    "connectionErrorMsg": "Failed to connect to OBD device.",
+    "initFailed": "Initialization Failed",
+    "initFailedMsg": "Connected to OBD device but initialization failed. Try reconnecting.",
+    "connectionFailed": "Connection Failed",
+    "connectionFailedMsg": "Could not connect to OBD device. Please check your settings and try again.",
+    "connectedTitle": "Connected!",
+    "connectedMsg": "Successfully connected to your {{vehicle}}. VIN reading complete.",
+    "socketError": "Socket error: {{error}}"
+  },
+  "profile": {
+    "welcome": "Welcome!",
+    "subtitle": "Set up your profile to get started",
+    "tapToUpload": "Tap to upload photo",
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "firstNamePlaceholder": "Enter your first name",
+    "lastNamePlaceholder": "Enter your last name",
+    "continue": "Continue",
+    "skipRegistration": "Skip - Go to Diagnostic",
+    "editProfile": "Edit Profile",
+    "save": "Save",
+    "changePhoto": "Change Photo",
+    "removePhoto": "Remove Photo"
+  },
+  "validation": {
+    "firstNameRequired": "First name is required",
+    "firstNameMin": "First name must be at least 2 characters",
+    "lastNameRequired": "Last name is required",
+    "lastNameMin": "Last name must be at least 2 characters"
+  },
+  "languages": {
+    "en": "English",
+    "ru": "Русский",
+    "hy": "Հայերեն"
+  }
+}

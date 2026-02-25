@@ -1,0 +1,75 @@
+{
+  "common": {
+    "ok": "Լավ",
+    "cancel": "Չեղարկել",
+    "close": "Փակել",
+    "connect": "Միանալ",
+    "disconnect": "Անջատել",
+    "connected": "Միացված է",
+    "disconnected": "Անջատված է",
+    "readingVin": "VIN-ի ընթերցում...",
+    "myCar": "Իմ մեքենան"
+  },
+  "dashboard": {
+    "title": "Վահանակ",
+    "connection": "ԿԱՊԱԿՑՈՒՄ",
+    "engine": "Շարժիչ",
+    "battery": "Մարտկոց",
+    "errorLog": "Սխալների մատյան",
+    "brakePad": "Արգելակի կոնտակտներ",
+    "abs": "ABS",
+    "ac": "Օդորակիչ",
+    "fuelRange": "Վառելիքի պաշար",
+    "speed": "Արագություն",
+    "rpm": "Պտույտներ",
+    "kmh": "կմ/ժ",
+    "status": "Կարգավիճակ",
+    "on": "ՎԿԼ",
+    "off": "ԱՆՋԱՏ",
+    "readRpm": "Կարդալ պտույտները",
+    "readSpeed": "Կարդալ արագությունը",
+    "diagnostic": "Ախտորոշում",
+    "troubleCodes": "ՍԽԱԼՆԵՐԻ ԿՈԴԵՐ",
+    "rawResponse": "ՀՈՒՄ ՊԱՏԱՍԽԱՆ",
+    "connectToStart": "Միացեք OBD-ին սկսելու համար"
+  },
+  "modal": {
+    "invalidInput": "Անվավեր մուտք",
+    "invalidInputMsg": "Խնդրում ենք մուտքագրել վավեր OBD Wi-Fi հոսթ և պորտ։",
+    "connectionError": "Կապի սխալ",
+    "connectionErrorMsg": "Չհաջողվեց միանալ OBD սարքին։",
+    "initFailed": "Սկզբնավորման սխալ",
+    "initFailedMsg": "Միացված է OBD սարքին, բայց սկզբնավորումը ձախողվեց։ Փորձեք կրկին միանալ։",
+    "connectionFailed": "Միացումը ձախողվեց",
+    "connectionFailedMsg": "Չհաջողվեց միանալ OBD սարքին։ Ստուգեք կարգավորումները և փորձեք կրկին։",
+    "connectedTitle": "Միացված է!",
+    "connectedMsg": "Հաջողությամբ միացված է ձեր {{vehicle}}-ին։ VIN-ի ընթերցումն ավարտված է։",
+    "socketError": "Սոկետի սխալ՝ {{error}}"
+  },
+  "profile": {
+    "welcome": "Բարի գալուստ!",
+    "subtitle": "Կարգավորեք ձեր պրոֆիլը",
+    "tapToUpload": "Սեղմեք ներբեռնելու համար",
+    "firstName": "Անուն",
+    "lastName": "Ազգանուն",
+    "firstNamePlaceholder": "Մուտքագրեք անուն",
+    "lastNamePlaceholder": "Մուտքագրեք ազգանուն",
+    "continue": "Շարունակել",
+    "skipRegistration": "Բաց թողնել - Անցնել ախտորոշմանը",
+    "editProfile": "Խմբագրել պրոֆիլը",
+    "save": "Պահպանել",
+    "changePhoto": "Փոխել լուսանկարը",
+    "removePhoto": "Հեռացնել լուսանկարը"
+  },
+  "validation": {
+    "firstNameRequired": "\u0531\u0576\u0578\u0582\u0576\u0568 \u057a\u0561\u0580\u057f\u0561\u0564\u056b\u0580 \u0567",
+    "firstNameMin": "\u0531\u0576\u0578\u0582\u0576\u0568 \u057a\u0565\u057f\u0584 \u0567 \u056c\u056b\u0576\u056b \u0576\u057e\u0561\u0566\u0561\u0563\u0578\u0582\u0575\u0576\u0568 2 \u0576\u056b\u0577",
+    "lastNameRequired": "\u0531\u0566\u0563\u0561\u0576\u0578\u0582\u0576\u0568 \u057a\u0561\u0580\u057f\u0561\u0564\u056b\u0580 \u0567",
+    "lastNameMin": "\u0531\u0566\u0563\u0561\u0576\u0578\u0582\u0576\u0568 \u057a\u0565\u057f\u0584 \u0567 \u056c\u056b\u0576\u056b \u0576\u057e\u0561\u0566\u0561\u0563\u0578\u0582\u0575\u0576\u0568 2 \u0576\u056b\u0577"
+  },
+  "languages": {
+    "en": "Անգլերեն",
+    "ru": "Ռուսերեն",
+    "hy": "Հայերեն"
+  }
+}

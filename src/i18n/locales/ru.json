@@ -1,0 +1,75 @@
+{
+  "common": {
+    "ok": "ОК",
+    "cancel": "Отмена",
+    "close": "Закрыть",
+    "connect": "Подключить",
+    "disconnect": "Отключить",
+    "connected": "Подключено",
+    "disconnected": "Отключено",
+    "readingVin": "Чтение VIN...",
+    "myCar": "Мой автомобиль"
+  },
+  "dashboard": {
+    "title": "Панель",
+    "connection": "ПОДКЛЮЧЕНИЕ",
+    "engine": "Двигатель",
+    "battery": "Батарея",
+    "errorLog": "Журнал ошибок",
+    "brakePad": "Тормозные колодки",
+    "abs": "АБС",
+    "ac": "Кондиционер",
+    "fuelRange": "Запас топлива",
+    "speed": "Скорость",
+    "rpm": "Обороты",
+    "kmh": "км/ч",
+    "status": "Статус",
+    "on": "ВКЛ",
+    "off": "ВЫКЛ",
+    "readRpm": "Читать обороты",
+    "readSpeed": "Читать скорость",
+    "diagnostic": "Диагностика",
+    "troubleCodes": "КОДЫ ОШИБОК",
+    "rawResponse": "СЫРОЙ ОТВЕТ",
+    "connectToStart": "Подключитесь к OBD для начала"
+  },
+  "modal": {
+    "invalidInput": "Неверный ввод",
+    "invalidInputMsg": "Пожалуйста, введите правильный хост и порт OBD Wi-Fi.",
+    "connectionError": "Ошибка подключения",
+    "connectionErrorMsg": "Не удалось подключиться к устройству OBD.",
+    "initFailed": "Ошибка инициализации",
+    "initFailedMsg": "Подключено к устройству OBD, но инициализация не удалась. Попробуйте переподключиться.",
+    "connectionFailed": "Подключение не удалось",
+    "connectionFailedMsg": "Не удалось подключиться к устройству OBD. Проверьте настройки и попробуйте снова.",
+    "connectedTitle": "Подключено!",
+    "connectedMsg": "Успешно подключено к вашему {{vehicle}}. Чтение VIN завершено.",
+    "socketError": "Ошибка сокета: {{error}}"
+  },
+  "profile": {
+    "welcome": "Добро пожаловать!",
+    "subtitle": "Настройте свой профиль для начала",
+    "tapToUpload": "Нажмите, чтобы загрузить фото",
+    "firstName": "Имя",
+    "lastName": "Фамилия",
+    "firstNamePlaceholder": "Введите ваше имя",
+    "lastNamePlaceholder": "Введите вашу фамилию",
+    "continue": "Продолжить",
+    "skipRegistration": "Пропустить - Перейти к диагностике",
+    "editProfile": "Редактировать профиль",
+    "save": "Сохранить",
+    "changePhoto": "Изменить фото",
+    "removePhoto": "Удалить фото"
+  },
+  "validation": {
+    "firstNameRequired": "Имя обязательно",
+    "firstNameMin": "Имя должно содержать минимум 2 символа",
+    "lastNameRequired": "Фамилия обязательна",
+    "lastNameMin": "Фамилия должна содержать минимум 2 символа"
+  },
+  "languages": {
+    "en": "English",
+    "ru": "Русский",
+    "hy": "Հայերեն"
+  }
+}
