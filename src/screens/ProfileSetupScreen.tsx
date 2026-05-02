@@ -79,7 +79,7 @@ const ProfileSetupScreen: React.FC = () => {
         <TouchableOpacity
           style={styles.languageBtn}
           onPress={showLanguageSelector}>
-          <Text style={styles.languageBtnText}>🌐</Text>
+          <Text style={styles.languageBtnText}>⊕</Text>
         </TouchableOpacity>
       </View>
 
@@ -92,7 +92,7 @@ const ProfileSetupScreen: React.FC = () => {
           keyboardShouldPersistTaps="handled">
 
           <View style={styles.topSection}>
-            <Text style={styles.welcomeEmoji}>🚗</Text>
+            <Text style={styles.welcomeEmoji}>◈</Text>
             <Text style={styles.title}>{t('profile.welcome')}</Text>
             <Text style={styles.subtitle}>{t('profile.subtitle')}</Text>
           </View>
@@ -106,7 +106,7 @@ const ProfileSetupScreen: React.FC = () => {
                 size={120}
               />
               <View style={styles.cameraIcon}>
-                <Text style={styles.cameraIconText}>📷</Text>
+                <Text style={styles.cameraIconText}>+</Text>
               </View>
             </TouchableOpacity>
             <Text style={styles.photoHint}>{t('profile.tapToUpload')}</Text>

@@ -26,6 +26,7 @@
     "react-i18next": "^16.5.4",
     "react-native": "0.82.1",
     "react-native-ble-plx": "^3.5.0",
+    "react-native-bluetooth-classic": "^1.73.0-rc.17",
     "react-native-gesture-handler": "^2.29.1",
     "react-native-image-picker": "^8.2.1",
     "react-native-safe-area-context": "^5.5.2",

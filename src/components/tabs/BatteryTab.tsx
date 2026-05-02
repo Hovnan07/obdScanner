@@ -30,7 +30,7 @@ const BatteryTab: React.FC<BatteryTabProps> = ({ obdConnected }) => {
       </View>
 
       <View style={styles.placeholderCard}>
-        <Text style={styles.placeholderEmoji}>🔋</Text>
+        <Text style={styles.placeholderEmoji}>▣</Text>
         <Text style={styles.placeholderText}>
           Battery diagnostics will be available here
         </Text>

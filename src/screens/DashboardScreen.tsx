@@ -1,31 +1,29 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   ActivityIndicator,
+  PermissionsAndroid,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   ScrollView,
   StatusBar,
   Platform,
 } from 'react-native';
-import TcpSocket from 'react-native-tcp-socket';
+import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
 import dtcCodesRaw from '../../codes.json';
 import { useObdStore } from '../store/obdStore';
 import NotificationModal from '../components/NotificationModal';
 import LanguageSelector from '../components/LanguageSelector';
 import ProfileAvatar from '../components/ProfileAvatar';
 import EngineTab from '../components/tabs/EngineTab';
-import BatteryTab from '../components/tabs/BatteryTab';
 import ErrorLogTab from '../components/tabs/ErrorLogTab';
-import BrakePadTab from '../components/tabs/BrakePadTab';
-import ABSTab from '../components/tabs/ABSTab';
-import ACTab from '../components/tabs/ACTab';
+import ConnectModal from '../components/ConnectModal';
 import { useTranslation } from 'react-i18next';
+import { scanVin } from '../services/carImageService';
 
-const getTabs = (t: any) => [t('dashboard.engine'), t('dashboard.battery'), t('dashboard.errorLog'), t('dashboard.brakePad'), t('dashboard.abs'), t('dashboard.ac')];
+const getTabs = (t: any) => [t('dashboard.engine'), t('dashboard.errorLog')];
 
 const dtcLookup: Record<string, string> = {};
 for (const entry of dtcCodesRaw as Array<{ Code: string; Description: string }>) {
@@ -33,50 +31,11 @@ for (const entry of dtcCodesRaw as Array<{ Code: string; Description: string }>)
   dtcLookup[code] = entry.Description;
 }
 
-// VIN WMI (first 3 chars) to manufacturer name
-const WMI_MAP: Record<string, string> = {
-  WBA: 'BMW', WBS: 'BMW M', WBY: 'BMW', '4US': 'BMW',
-  WDB: 'Mercedes-Benz', WDC: 'Mercedes-Benz', WDD: 'Mercedes-Benz', 'W1K': 'Mercedes-Benz',
-  WAU: 'Audi', WUA: 'Audi',
-  WVW: 'Volkswagen', WV2: 'Volkswagen',
-  WP0: 'Porsche', WP1: 'Porsche',
-  JTD: 'Toyota', JTE: 'Toyota', '4T1': 'Toyota', '5TD': 'Toyota',
-  JHM: 'Honda', '1HG': 'Honda', '2HG': 'Honda', '5FN': 'Honda',
-  JN1: 'Nissan', JN8: 'Nissan', '1N4': 'Nissan', '5N1': 'Nissan',
-  '1FA': 'Ford', '1FT': 'Ford', '3FA': 'Ford',
-  '1G1': 'Chevrolet', '1GC': 'Chevrolet', '2G1': 'Chevrolet',
-  '1GY': 'Cadillac',
-  '1GM': 'Pontiac',
-  '2HM': 'Hyundai', KMH: 'Hyundai', '5NP': 'Hyundai',
-  KNA: 'Kia', KND: 'Kia',
-  JF1: 'Subaru', JF2: 'Subaru', '4S3': 'Subaru', '4S4': 'Subaru',
-  JMA: 'Mitsubishi', JMB: 'Mitsubishi', JA3: 'Mitsubishi',
-  MAJ: 'Ford (India)', SAL: 'Land Rover', SAJ: 'Jaguar',
-  ZFF: 'Ferrari', ZAM: 'Maserati', ZAR: 'Alfa Romeo',
-  YV1: 'Volvo', YV4: 'Volvo',
-  TRU: 'Audi (Hungary)', TMB: 'Skoda',
-  VF1: 'Renault', VF3: 'Peugeot', VF7: 'Citroen',
-  SCC: 'Lotus', SCF: 'Aston Martin',
-};
-
-const decodeVinMake = (vin: string): string => {
-  const v = vin.toUpperCase();
-  const wmi3 = v.substring(0, 3);
-  if (WMI_MAP[wmi3]) return WMI_MAP[wmi3];
-  const wmi2 = v.substring(0, 2);
-  for (const key of Object.keys(WMI_MAP)) {
-    if (key.startsWith(wmi2)) return WMI_MAP[key];
-  }
-  return vin.substring(0, 3);
-};
-
 const DashboardScreen: React.FC = () => {
   const { t } = useTranslation();
-  
-  // Zustand store
+
   const {
-    obdHost,
-    obdPort,
+    bleDeviceId,
     obdConnected,
     obdConnecting,
     obdRpm,
@@ -84,7 +43,6 @@ const DashboardScreen: React.FC = () => {
     dtcResults,
     dtcScanning,
     livePolling,
-    showSettings,
     activeTab,
     vehicleVin,
     vehicleMake,
@@ -97,8 +55,7 @@ const DashboardScreen: React.FC = () => {
     userFirstName,
     userLastName,
     userProfileImage,
-    setObdHost,
-    setObdPort,
+    setBleDeviceId,
     setObdConnected,
     setObdConnecting,
     setObdLastResponse,
@@ -107,7 +64,6 @@ const DashboardScreen: React.FC = () => {
     setDtcResults,
     setDtcScanning,
     setLivePolling,
-    setShowSettings,
     setActiveTab,
     setVehicleVin,
     setVehicleMake,
@@ -119,23 +75,68 @@ const DashboardScreen: React.FC = () => {
     setProfileEditVisible,
   } = useObdStore();
 
-  // Refs for socket and intervals
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const obdSocketRef = useRef<any>(null);
-  const obdBufferRef = useRef('');
-  const obdPendingRef = useRef<null | { resolve: (s: string) => void; reject: (e: any) => void }>(null);
+  const bleDeviceRef = useRef<BluetoothDevice | null>(null);
+  const [make, setMake] = useState<string | undefined>(undefined);
+  const [model, setModel] = useState<string | undefined>(undefined);
+  const [modelYear, setModelYear] = useState<string | undefined>(undefined);
+  const [bleDevices, setBleDevices] = useState<BluetoothDevice[]>([]);
+  const [bleScanning, setBleScanning] = useState(false);
+  const [connectModalVisible, setConnectModalVisible] = useState(false);
 
   useEffect(() => {
     return () => {
-      if (liveIntervalRef.current) {
-        clearInterval(liveIntervalRef.current);
-      }
-      if (obdSocketRef.current) {
-        try { obdSocketRef.current.destroy(); } catch { /* ignore */ }
-        obdSocketRef.current = null;
+      if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
+      try {
+        if (bleDeviceRef.current?.isConnected()) bleDeviceRef.current.disconnect();
+      } catch { /* ignore */ } finally {
+        bleDeviceRef.current = null;
       }
     };
   }, []);
+
+  // Auto-close the connect modal once the device connects
+  useEffect(() => {
+    if (obdConnected) setConnectModalVisible(false);
+  }, [obdConnected]);
+
+  const ensureBtPermissions = async () => {
+    if (Platform.OS !== 'android') return true;
+    try {
+      const perms: any[] = [];
+      if (Platform.Version >= 31) {
+        perms.push(PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN);
+        perms.push(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT);
+      } else {
+        perms.push(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+      }
+      const results: any = await PermissionsAndroid.requestMultiple(perms as any);
+      return perms.every((p) => results?.[p] === PermissionsAndroid.RESULTS.GRANTED);
+    } catch {
+      return false;
+    }
+  };
+
+  const startBleScan = async () => {
+    const ok = await ensureBtPermissions();
+    if (!ok) {
+      showModal('error', t('modal.connectionError'), 'Bluetooth permission denied');
+      return;
+    }
+    setBleDevices([]);
+    setBleScanning(true);
+    try {
+      const bonded = await RNBluetoothClassic.getBondedDevices();
+      setBleDevices(bonded);
+      setBleScanning(false);
+      if (bonded.length === 0) {
+        showModal('info', 'No Paired Devices', 'Please pair your OBD adapter in Bluetooth settings first');
+      }
+    } catch (e) {
+      setBleScanning(false);
+      showModal('error', t('modal.connectionError'), String(e));
+    }
+  };
 
   const parseHexBytes = (raw: string) => {
     const cleaned = raw
@@ -145,12 +146,12 @@ const DashboardScreen: React.FC = () => {
       .trim();
     const tokens = cleaned.split(' ').filter(Boolean);
     const bytes: number[] = [];
-    for (const t of tokens) {
-      if (/^[0-9A-Fa-f]{2}$/.test(t)) {
-        bytes.push(parseInt(t, 16));
-      } else if (/^[0-9A-Fa-f]+$/.test(t) && t.length % 2 === 0) {
-        for (let j = 0; j < t.length; j += 2) {
-          bytes.push(parseInt(t.substring(j, j + 2), 16));
+    for (const tok of tokens) {
+      if (/^[0-9A-Fa-f]{2}$/.test(tok)) {
+        bytes.push(parseInt(tok, 16));
+      } else if (/^[0-9A-Fa-f]+$/.test(tok) && tok.length % 2 === 0) {
+        for (let j = 0; j < tok.length; j += 2) {
+          bytes.push(parseInt(tok.substring(j, j + 2), 16));
         }
       }
     }
@@ -161,9 +162,7 @@ const DashboardScreen: React.FC = () => {
     const bytes = parseHexBytes(raw);
     for (let i = 0; i + 3 < bytes.length; i++) {
       if (bytes[i] === 0x41 && bytes[i + 1] === 0x0c) {
-        const a = bytes[i + 2];
-        const b = bytes[i + 3];
-        return (a * 256 + b) / 4;
+        return (bytes[i + 2] * 256 + bytes[i + 3]) / 4;
       }
     }
     return null;
@@ -172,9 +171,7 @@ const DashboardScreen: React.FC = () => {
   const parseSpeedFrom010D = (raw: string) => {
     const bytes = parseHexBytes(raw);
     for (let i = 0; i + 2 < bytes.length; i++) {
-      if (bytes[i] === 0x41 && bytes[i + 1] === 0x0d) {
-        return bytes[i + 2];
-      }
+      if (bytes[i] === 0x41 && bytes[i + 1] === 0x0d) return bytes[i + 2];
     }
     return null;
   };
@@ -184,10 +181,7 @@ const DashboardScreen: React.FC = () => {
     const codes: string[] = [];
     let dataStart = -1;
     for (let i = 0; i < bytes.length; i++) {
-      if (bytes[i] === 0x43) {
-        dataStart = i + 1;
-        break;
-      }
+      if (bytes[i] === 0x43) { dataStart = i + 1; break; }
     }
     if (dataStart < 0) return codes;
     const prefixMap: Record<number, string> = {
@@ -211,29 +205,24 @@ const DashboardScreen: React.FC = () => {
 
   const parseVinFrom0902 = (raw: string): string | null => {
     const bytes = parseHexBytes(raw);
-    // Look for 49 02 response header
-    let dataStart = -1;
-    for (let i = 0; i < bytes.length; i++) {
-      if (bytes[i] === 0x49 && bytes[i + 1] === 0x02) {
-        dataStart = i + 3; // skip 49 02 <count>
-        break;
+    const vinBytes: number[] = [];
+    let i = 0;
+    while (i < bytes.length) {
+      if (bytes[i] === 0x49 && i + 1 < bytes.length && bytes[i + 1] === 0x02) {
+        i += 3;
+        continue;
       }
-    }
-    if (dataStart < 0) {
-      // Try extracting ASCII directly from cleaned response
-      const ascii = raw.replace(/[^A-Za-z0-9]/g, '');
-      if (ascii.length >= 17) {
-        return ascii.substring(ascii.length - 17);
-      }
-      return null;
+      vinBytes.push(bytes[i]);
+      i++;
     }
     const vinChars: string[] = [];
-    for (let i = dataStart; i < bytes.length && vinChars.length < 17; i++) {
-      if (bytes[i] >= 0x20 && bytes[i] <= 0x7e) {
-        vinChars.push(String.fromCharCode(bytes[i]));
-      }
+    for (const b of vinBytes) {
+      if (b >= 0x20 && b <= 0x7e) vinChars.push(String.fromCharCode(b));
     }
-    return vinChars.length >= 17 ? vinChars.join('') : null;
+    if (vinChars.length >= 17) return vinChars.slice(0, 17).join('');
+    const ascii = raw.replace(/[^A-Za-z0-9]/g, '');
+    if (ascii.length >= 17) return ascii.substring(ascii.length - 17);
+    return null;
   };
 
   const readVehicleInfo = async () => {
@@ -241,10 +230,15 @@ const DashboardScreen: React.FC = () => {
     try {
       const resp = await obdSend('0902', 8000);
       const vin = parseVinFrom0902(resp);
-      if (vin && vin.length >= 17) {
+      if (vin && vin.length > 0) {
         setVehicleVin(vin);
-        const make = decodeVinMake(vin);
-        setVehicleMake(make);
+        const decoded = await scanVin(vin);
+        if (decoded) {
+          setModelYear(decoded.modelYear ?? undefined);
+          setModel(decoded.model ?? undefined);
+          setMake(decoded.make ?? undefined);
+          if (decoded.make) setVehicleMake(decoded.make);
+        }
       } else {
         setVehicleMake('Vehicle');
       }
@@ -255,119 +249,80 @@ const DashboardScreen: React.FC = () => {
     }
   };
 
-  const obdHandleData = (data: any) => {
-    const chunk = typeof data === 'string' ? data : data?.toString?.('utf8') ?? String(data);
-    obdBufferRef.current += chunk;
-    if (obdPendingRef.current && obdBufferRef.current.includes('>')) {
-      const full = obdBufferRef.current;
-      obdBufferRef.current = '';
-      const cleaned = full.replace(/\r/g, '').replace(/\n/g, '\n').replace(/>/g, '').trim();
-      setObdLastResponse(cleaned);
-      const pending = obdPendingRef.current;
-      obdPendingRef.current = null;
-      pending.resolve(cleaned);
+  const obdReadUntilPrompt = async (timeoutMs: number): Promise<string> => {
+    const device = bleDeviceRef.current;
+    if (!device) throw new Error('Not connected');
+    let buffer = '';
+    const deadline = Date.now() + timeoutMs;
+    let lastDataTime = 0;
+    while (Date.now() < deadline) {
+      try {
+        const msg = await device.read();
+        if (msg) {
+          buffer += msg + '\n';
+          lastDataTime = Date.now();
+          if (buffer.includes('>')) {
+            return buffer.replace(/\r/g, '').replace(/>/g, '').trim();
+          }
+        } else if (lastDataTime > 0 && Date.now() - lastDataTime > 500) {
+          return buffer.replace(/\r/g, '').replace(/>/g, '').trim();
+        }
+      } catch (e) {
+        console.log('[obdRead] Read error:', e);
+      }
+      await new Promise<void>(r => setTimeout(r, 50));
     }
+    if (buffer.trim().length > 0) return buffer.replace(/\r/g, '').replace(/>/g, '').trim();
+    throw new Error('OBD timeout');
   };
 
-  const obdSend = (command: string, timeoutMs = 3000) => {
-    return new Promise<string>((resolve, reject) => {
-      if (!obdSocketRef.current) { reject(new Error('Not connected')); return; }
-      if (obdPendingRef.current) { reject(new Error('Another command is in progress')); return; }
-      obdBufferRef.current = '';
-      obdPendingRef.current = { resolve, reject };
-      const timer = setTimeout(() => {
-        if (obdPendingRef.current) {
-          obdPendingRef.current = null;
-          reject(new Error('OBD timeout'));
-        }
-      }, timeoutMs);
-      const originalResolve = resolve;
-      const originalReject = reject;
-      obdPendingRef.current = {
-        resolve: (s) => { clearTimeout(timer); originalResolve(s); },
-        reject: (e) => { clearTimeout(timer); originalReject(e); },
-      };
-      try {
-        obdSocketRef.current.write(`${command.trim()}\r`);
-      } catch (e) {
-        clearTimeout(timer);
-        obdPendingRef.current = null;
-        reject(e);
-      }
-    });
+  const obdSend = async (command: string, timeoutMs = 10000): Promise<string> => {
+    if (!bleDeviceRef.current) throw new Error('Not connected');
+    try { await bleDeviceRef.current.clear(); } catch { /* ignore */ }
+    await bleDeviceRef.current.write(`${command.trim()}\r`);
+    const response = await obdReadUntilPrompt(timeoutMs);
+    setObdLastResponse(response);
+    return response;
   };
 
   const obdInit = async () => {
-    await obdSend('ATZ', 3000);
-    await obdSend('ATE0', 2000);
-    await obdSend('ATL0', 2000);
-    await obdSend('ATS0', 2000);
-    await obdSend('ATH0', 2000);
-    await obdSend('ATSP0', 2000);
+    await obdSend('ATZ', 5000);
+    await obdSend('ATE0', 3000);
+    await obdSend('ATL0', 3000);
+    await obdSend('ATS0', 3000);
+    await obdSend('ATH0', 3000);
+    await obdSend('ATSP0', 3000);
   };
 
   const handleObdConnect = async () => {
     try {
-      const portNum = Number(obdPort);
-      if (!obdHost || !Number.isFinite(portNum)) {
-        showModal('error', t('modal.invalidInput'), t('modal.invalidInputMsg'));
+      if (!bleDeviceId) {
+        showModal('error', t('modal.invalidInput'), 'Select a Bluetooth device');
         return;
       }
-      if (obdSocketRef.current) {
-        try { obdSocketRef.current.destroy(); } catch { /* ignore */ }
-        obdSocketRef.current = null;
+      const ok = await ensureBtPermissions();
+      if (!ok) {
+        showModal('error', t('modal.connectionError'), 'Bluetooth permission denied');
+        return;
       }
       setObdConnecting(true);
       setObdLastResponse('');
       setObdRpm(null);
       setObdSpeedKmh(null);
-      obdBufferRef.current = '';
-      
-      let connectionTimeout: ReturnType<typeof setTimeout> | null = null;
-      let isConnected = false;
-      
-      const socket = TcpSocket.createConnection(
-        { host: obdHost, port: portNum },
-        async () => {
-          isConnected = true;
-          if (connectionTimeout) clearTimeout(connectionTimeout);
-          setObdConnected(true);
-          try {
-            await obdInit();
-            setObdLastResponse('OBD ready — reading vehicle info...');
-            await readVehicleInfo();
-            setShowSettings(false);
-            setObdConnecting(false);
-            showModal('success', t('modal.connectedTitle'), t('modal.connectedMsg', { vehicle: vehicleMake }));
-          } catch (e) {
-            setObdLastResponse(`Connected, init failed: ${String(e)}`);
-            setObdConnecting(false);
-            showModal('error', t('modal.initFailed'), t('modal.initFailedMsg'));
-          }
-        }
-      );
-      
-      connectionTimeout = setTimeout(() => {
-        if (!isConnected) {
-          try { socket.destroy(); } catch { /* ignore */ }
-          setObdConnecting(false);
-          showModal('error', t('modal.connectionError'), t('modal.connectionErrorMsg'));
-        }
-      }, 8000);
-      
-      socket.on('data', obdHandleData);
-      socket.on('error', (e: any) => {
-        if (connectionTimeout) clearTimeout(connectionTimeout);
-        setObdLastResponse(t('modal.socketError', { error: String(e) }));
-        setObdConnected(false);
+      const device = await RNBluetoothClassic.connectToDevice(bleDeviceId, { delimiter: '\r' });
+      bleDeviceRef.current = device;
+      setObdConnected(true);
+      try {
+        await obdInit();
+        setObdLastResponse('OBD ready — reading vehicle info...');
+        await readVehicleInfo();
         setObdConnecting(false);
-        showModal('error', t('modal.connectionError'), t('modal.connectionErrorMsg'));
-      });
-      socket.on('close', () => { 
-        if (connectionTimeout) clearTimeout(connectionTimeout);
-        setObdConnected(false);
-      });
-      obdSocketRef.current = socket;
+        showModal('success', t('modal.connectedTitle'), t('modal.connectedMsg', { vehicle: vehicleMake }));
+      } catch (e) {
+        setObdLastResponse(`Connected, init failed: ${String(e)}`);
+        setObdConnecting(false);
+        showModal('error', t('modal.initFailed'), t('modal.initFailedMsg'));
+      }
     } catch (e) {
       console.error(e);
       setObdConnecting(false);
@@ -376,29 +331,23 @@ const DashboardScreen: React.FC = () => {
   };
 
   const stopLivePolling = () => {
-    if (liveIntervalRef.current) {
-      clearInterval(liveIntervalRef.current);
-      liveIntervalRef.current = null;
-    }
+    if (liveIntervalRef.current) { clearInterval(liveIntervalRef.current); liveIntervalRef.current = null; }
     setLivePolling(false);
   };
 
   const handleObdDisconnect = () => {
     stopLivePolling();
     try {
-      if (obdSocketRef.current) { obdSocketRef.current.destroy(); }
+      if (bleDeviceRef.current?.isConnected()) bleDeviceRef.current.disconnect();
     } catch { /* ignore */ } finally {
-      obdSocketRef.current = null;
+      bleDeviceRef.current = null;
       setObdConnected(false);
     }
   };
 
   const handleReadRpm = async () => {
     try {
-      const resp = await obdSend('010C');
-      const rpm = parseRpmFrom010C(resp);
-      setObdRpm(rpm);
-      setObdLastResponse(resp);
+      setObdRpm(parseRpmFrom010C(await obdSend('010C')));
     } catch (e) {
       Alert.alert('RPM failed', String(e));
     }
@@ -406,38 +355,22 @@ const DashboardScreen: React.FC = () => {
 
   const handleReadSpeed = async () => {
     try {
-      const resp = await obdSend('010D');
-      const speed = parseSpeedFrom010D(resp);
-      setObdSpeedKmh(speed);
-      setObdLastResponse(resp);
+      setObdSpeedKmh(parseSpeedFrom010D(await obdSend('010D')));
     } catch (e) {
       Alert.alert('Speed failed', String(e));
     }
   };
 
   const pollOnce = async () => {
-    try {
-      const rpmResp = await obdSend('010C');
-      const rpm = parseRpmFrom010C(rpmResp);
-      setObdRpm(rpm);
-    } catch { /* ignore */ }
-    try {
-      const speedResp = await obdSend('010D');
-      const speed = parseSpeedFrom010D(speedResp);
-      setObdSpeedKmh(speed);
-    } catch { /* ignore */ }
+    try { setObdRpm(parseRpmFrom010C(await obdSend('010C'))); } catch { /* ignore */ }
+    try { setObdSpeedKmh(parseSpeedFrom010D(await obdSend('010D'))); } catch { /* ignore */ }
   };
 
   const handleToggleLive = () => {
     if (livePolling) { stopLivePolling(); return; }
     setLivePolling(true);
     let polling = false;
-    const tick = async () => {
-      if (polling) return;
-      polling = true;
-      await pollOnce();
-      polling = false;
-    };
+    const tick = async () => { if (polling) return; polling = true; await pollOnce(); polling = false; };
     tick();
     liveIntervalRef.current = setInterval(tick, 1000);
   };
@@ -454,15 +387,11 @@ const DashboardScreen: React.FC = () => {
         return;
       }
       const codes = parseDTCs(resp);
-      if (codes.length === 0) {
-        setDtcResults([{ code: '—', description: 'No trouble codes found' }]);
-      } else {
-        const results = codes.map((c) => ({
-          code: c,
-          description: dtcLookup[c] ?? 'Unknown code',
-        }));
-        setDtcResults(results);
-      }
+      setDtcResults(
+        codes.length === 0
+          ? [{ code: '—', description: 'No trouble codes found' }]
+          : codes.map((c) => ({ code: c, description: dtcLookup[c] ?? 'Unknown code' })),
+      );
     } catch (e) {
       Alert.alert('DTC scan failed', String(e));
     } finally {
@@ -470,55 +399,43 @@ const DashboardScreen: React.FC = () => {
     }
   };
 
+  const tabs = getTabs(t);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F2F2F7" />
 
-      {/* Sticky Header */}
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerRow}
-          activeOpacity={0.7}
-          onPress={() => setProfileEditVisible(true)}>
-          <ProfileAvatar
-            firstName={userFirstName}
-            lastName={userLastName}
-            imageUri={userProfileImage}
-            size={44}
-          />
+        <TouchableOpacity style={styles.headerRow} activeOpacity={0.7} onPress={() => setProfileEditVisible(true)}>
+          <ProfileAvatar firstName={userFirstName} lastName={userLastName} imageUri={userProfileImage} size={44} />
           <View style={styles.headerTextGroup}>
-            <Text style={styles.headerTitle}>
-              {userFirstName} {userLastName}
+            <Text style={styles.headerTitle}>{userFirstName} {userLastName}</Text>
+            <Text style={styles.headerSubtitle}>
+              {obdConnected
+                ? `${vehicleMake}${vehicleVin ? ` · ${vehicleVin}` : ''}`
+                : vinReading
+                ? t('common.readingVin')
+                : t('dashboard.connectToStart')}
             </Text>
-            {obdConnected ? (
-              <Text style={styles.headerSubtitle}>
-                {vehicleMake}{vehicleVin ? ` · ${vehicleVin}` : ''}
-              </Text>
-            ) : vinReading ? (
-              <Text style={styles.headerSubtitle}>{t('common.readingVin')}</Text>
-            ) : (
-              <Text style={styles.headerSubtitle}>{t('dashboard.connectToStart')}</Text>
-            )}
           </View>
         </TouchableOpacity>
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.languageBtn}
-            onPress={showLanguageSelector}>
-            <Text style={styles.languageBtnText}>🌐</Text>
+          <TouchableOpacity style={styles.languageBtn} onPress={showLanguageSelector}>
+            <Text style={styles.languageBtnText}>⊕</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.settingsBtn}
-            onPress={() => setShowSettings(!showSettings)}>
-            <Text style={styles.settingsBtnText}>{showSettings ? '−' : '+'}</Text>
+            style={[styles.connectChip, obdConnected && styles.connectChipActive]}
+            onPress={() => setConnectModalVisible(true)}>
+            <View style={[styles.chipDot, obdConnected ? styles.chipDotOn : styles.chipDotOff]} />
+            <Text style={[styles.chipText, obdConnected && styles.chipTextActive]}>
+              {obdConnected ? 'Connected' : 'Connect'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         {/* Category tabs */}
         <ScrollView
@@ -526,152 +443,95 @@ const DashboardScreen: React.FC = () => {
           showsHorizontalScrollIndicator={false}
           style={styles.tabsScroll}
           contentContainerStyle={styles.tabsContent}>
-          {getTabs(t).map((tab, index) => (
+          {tabs.map((tab, index) => (
             <TouchableOpacity
               key={index}
               style={[styles.tab, activeTab === tab && styles.tabActive]}
               onPress={() => setActiveTab(tab)}>
-              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-                {tab}
-              </Text>
+              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        {/* Car Image */}
-        <View style={styles.carImageSection}>
-          <View style={styles.carImagePlaceholder}>
-            <Text style={styles.carEmoji}>🚗</Text>
-            <Text style={styles.carPlaceholderText}>
-              {obdConnected ? vehicleMake : t('dashboard.connectToStart')}
-            </Text>
-          </View>
+        {/* Vehicle status card */}
+        <View style={styles.vehicleCard}>
+          {obdConnecting || vinReading ? (
+            <>
+              <ActivityIndicator color="#007AFF" size="large" style={{ marginBottom: 10 }} />
+              <Text style={styles.vehicleCardSubtitle}>
+                {vinReading ? t('common.readingVin') : 'Connecting...'}
+              </Text>
+            </>
+          ) : obdConnected ? (
+            <>
+              <View style={styles.vehicleConnectedBadge}>
+                <View style={styles.vehicleConnectedDot} />
+                <Text style={styles.vehicleConnectedBadgeText}>Connected</Text>
+              </View>
+              <Text style={styles.vehicleName}>
+                {[make, model, modelYear].filter(Boolean).join(' ') || vehicleMake}
+              </Text>
+              {vehicleVin ? <Text style={styles.vehicleVin}>VIN · {vehicleVin}</Text> : null}
+            </>
+          ) : (
+            <>
+              <Text style={styles.vehicleCardEmoji}>⊘</Text>
+              <Text style={styles.vehicleCardTitle}>No vehicle connected</Text>
+              <Text style={styles.vehicleCardSubtitle}>{t('dashboard.connectToStart')}</Text>
+            </>
+          )}
         </View>
 
-        {/* Connection Settings (collapsible) */}
-        {showSettings && (
-          <View style={styles.card}>
-            <Text style={styles.cardSectionLabel}>{t('dashboard.connection')}</Text>
-            <View style={styles.settingsRow}>
-              <TextInput
-                value={obdHost}
-                onChangeText={setObdHost}
-                placeholder="Host IP"
-                placeholderTextColor="#bbb"
-                autoCapitalize="none"
-                style={styles.settingsInput}
-              />
-              <TextInput
-                value={obdPort}
-                onChangeText={setObdPort}
-                placeholder="Port"
-                placeholderTextColor="#bbb"
-                keyboardType="number-pad"
-                style={styles.settingsInputSmall}
-              />
-            </View>
-            <View style={styles.settingsRow}>
-              <TouchableOpacity
-                style={[styles.connectBtn, obdConnected && styles.connectBtnConnected]}
-                onPress={handleObdConnect}
-                disabled={obdConnected || obdConnecting}>
-                {obdConnecting ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.connectBtnText}>
-                    {obdConnected ? t('common.connected') : t('common.connect')}
-                  </Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.disconnectBtn, !obdConnected && styles.btnDisabled]}
-                onPress={handleObdDisconnect}
-                disabled={!obdConnected}>
-                <Text style={styles.disconnectBtnText}>{t('common.disconnect')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Tab Content - Switch Case */}
-        {(() => {
-          switch (activeTab) {
-            case t('dashboard.engine'):
-              return (
-                <EngineTab
-                  obdConnected={obdConnected}
-                  obdRpm={obdRpm}
-                  obdSpeedKmh={obdSpeedKmh}
-                  livePolling={livePolling}
-                  handleToggleLive={handleToggleLive}
-                  handleReadRpm={handleReadRpm}
-                  handleReadSpeed={handleReadSpeed}
-                />
-              );
-            case t('dashboard.battery'):
-              return <BatteryTab obdConnected={obdConnected} />;
-            case t('dashboard.errorLog'):
-              return (
-                <ErrorLogTab
-                  obdConnected={obdConnected}
-                  dtcResults={dtcResults}
-                  dtcScanning={dtcScanning}
-                  handleScanDtc={handleScanDTCs}
-                />
-              );
-            case t('dashboard.brakePad'):
-              return <BrakePadTab obdConnected={obdConnected} />;
-            case t('dashboard.abs'):
-              return <ABSTab obdConnected={obdConnected} />;
-            case t('dashboard.ac'):
-              return <ACTab obdConnected={obdConnected} />;
-            default:
-              return (
-                <EngineTab
-                  obdConnected={obdConnected}
-                  obdRpm={obdRpm}
-                  obdSpeedKmh={obdSpeedKmh}
-                  livePolling={livePolling}
-                  handleToggleLive={handleToggleLive}
-                  handleReadRpm={handleReadRpm}
-                  handleReadSpeed={handleReadSpeed}
-                />
-              );
-          }
-        })()}
+        {/* Tab content */}
+        <View style={styles.tabContent}>
+          {activeTab === t('dashboard.errorLog') ? (
+            <ErrorLogTab
+              obdConnected={obdConnected}
+              dtcResults={dtcResults}
+              dtcScanning={dtcScanning}
+              handleScanDtc={handleScanDTCs}
+            />
+          ) : (
+            <EngineTab
+              obdConnected={obdConnected}
+              obdRpm={obdRpm}
+              obdSpeedKmh={obdSpeedKmh}
+              livePolling={livePolling}
+              handleToggleLive={handleToggleLive}
+              handleReadRpm={handleReadRpm}
+              handleReadSpeed={handleReadSpeed}
+            />
+          )}
+        </View>
 
       </ScrollView>
 
-      {/* Bottom Diagnostic button */}
+      {/* Bottom diagnostic button */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
-          style={[
-            styles.diagnosticBtn,
-            (!obdConnected || dtcScanning || livePolling) && styles.btnDisabled,
-          ]}
+          style={[styles.diagnosticBtn, (!obdConnected || dtcScanning || livePolling) && styles.btnDisabled]}
           onPress={handleScanDTCs}
           disabled={!obdConnected || dtcScanning || livePolling}>
-          {dtcScanning ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.diagnosticBtnText}>{t('dashboard.diagnostic')}</Text>
-          )}
+          {dtcScanning
+            ? <ActivityIndicator color="#fff" size="small" />
+            : <Text style={styles.diagnosticBtnText}>{t('dashboard.diagnostic')}</Text>}
         </TouchableOpacity>
       </View>
 
-      {/* Notification Modal */}
-      <NotificationModal
-        visible={modalVisible}
-        type={modalType}
-        title={modalTitle}
-        message={modalMessage}
-        onClose={hideModal}
-      />
-
-      {/* Language Selector */}
-      <LanguageSelector
-        visible={languageSelectorVisible}
-        onClose={hideLanguageSelector}
+      <NotificationModal visible={modalVisible} type={modalType} title={modalTitle} message={modalMessage} onClose={hideModal} />
+      <LanguageSelector visible={languageSelectorVisible} onClose={hideLanguageSelector} />
+      <ConnectModal
+        visible={connectModalVisible}
+        onClose={() => setConnectModalVisible(false)}
+        bleScanning={bleScanning}
+        bleDevices={bleDevices}
+        bleDeviceId={bleDeviceId}
+        obdConnected={obdConnected}
+        obdConnecting={obdConnecting}
+        onScan={startBleScan}
+        onSelectDevice={setBleDeviceId}
+        onConnect={handleObdConnect}
+        onDisconnect={handleObdDisconnect}
       />
     </View>
   );
@@ -687,6 +547,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 100,
+    gap: 12,
+    paddingTop: 4,
   },
 
   // Header
@@ -742,36 +604,55 @@ const styles = StyleSheet.create({
   languageBtnText: {
     fontSize: 20,
   },
-  settingsBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+
+  // Connect chip
+  connectChip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    gap: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
   },
-  settingsBtnText: {
+  connectChipActive: {
+    backgroundColor: '#E8F5E9',
+  },
+  chipDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  chipDotOn: {
+    backgroundColor: '#34C759',
+  },
+  chipDotOff: {
+    backgroundColor: '#ccc',
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '700',
     color: '#1a1a1a',
-    fontSize: 22,
-    fontWeight: '300',
+  },
+  chipTextActive: {
+    color: '#2E7D32',
   },
 
   // Tabs
   tabsScroll: {
-    marginTop: 12,
-    marginBottom: 4,
+    marginTop: 8,
   },
   tabsContent: {
     paddingHorizontal: 20,
     gap: 8,
   },
   tab: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
@@ -793,263 +674,75 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 
-  // Car Image
-  carImageSection: {
-    alignItems: 'center',
-    paddingVertical: 16,
-    minHeight: 220,
-  },
-  carImagePlaceholder: {
-    width: '85%',
-    height: 200,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // Vehicle status card
+  vehicleCard: {
+    marginHorizontal: 20,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
+    padding: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 160,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 12,
     elevation: 3,
   },
-  carEmoji: {
-    fontSize: 80,
-    marginBottom: 8,
-  },
-  carPlaceholderText: {
-    color: '#999',
-    fontSize: 15,
-    fontWeight: '500',
-  },
-
-  // Shared card
-  card: {
-    marginHorizontal: 20,
-    backgroundColor: '#FFFFFF',
+  vehicleConnectedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
     borderRadius: 20,
-    padding: 20,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#1a1a1a',
-  },
-  cardSectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#999',
-    letterSpacing: 1.2,
-    marginBottom: 12,
-  },
-  arrowCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#1a1a1a',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  arrowIcon: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  // Bar gauge
-  barRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  barValue: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#1a1a1a',
-    fontVariant: ['tabular-nums'],
-    minWidth: 40,
-  },
-  barUnit: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#999',
-    minWidth: 36,
-  },
-  barTrack: {
-    flex: 1,
-    height: 6,
-    backgroundColor: '#E8E8ED',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: 6,
-    backgroundColor: '#C8E64A',
-    borderRadius: 3,
-  },
-
-  // Stats grid
-  statsGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 10,
-    marginBottom: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 16,
     paddingHorizontal: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  statCardLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#999',
-    marginBottom: 6,
-  },
-  statCardValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#1a1a1a',
-    fontVariant: ['tabular-nums'],
-  },
-  statusOn: {
-    color: '#34C759',
-  },
-  statusOff: {
-    color: '#999',
-  },
-
-  // Actions
-  actionsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 10,
+    paddingVertical: 5,
     marginBottom: 12,
+    gap: 6,
   },
-  actionBtn: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  actionBtnText: {
-    color: '#1a1a1a',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  // Settings
-  settingsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 10,
-  },
-  settingsInput: {
-    flex: 1,
-    backgroundColor: '#F2F2F7',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#1a1a1a',
-  },
-  settingsInputSmall: {
-    flex: 0.5,
-    backgroundColor: '#F2F2F7',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#1a1a1a',
-  },
-  connectBtn: {
-    flex: 1,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  connectBtnConnected: {
+  vehicleConnectedDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: '#34C759',
   },
-  connectBtnText: {
-    color: '#ffffff',
-    fontSize: 15,
+  vehicleConnectedBadgeText: {
+    fontSize: 13,
     fontWeight: '700',
+    color: '#2E7D32',
   },
-  disconnectBtn: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#FF3B30',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  disconnectBtnText: {
-    color: '#FF3B30',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-
-  // DTC
-  dtcRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
-    gap: 12,
-  },
-  dtcCodeBadge: {
-    backgroundColor: '#FFF0F0',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  dtcCodeText: {
-    color: '#FF3B30',
-    fontSize: 14,
+  vehicleName: {
+    fontSize: 22,
     fontWeight: '800',
-    fontVariant: ['tabular-nums'],
+    color: '#1a1a1a',
+    textAlign: 'center',
+    marginBottom: 6,
   },
-  dtcDescText: {
-    flex: 1,
-    color: '#666',
-    fontSize: 13,
-    fontWeight: '400',
+  vehicleVin: {
+    fontSize: 12,
+    color: '#999',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  vehicleCardEmoji: {
+    fontSize: 52,
+    marginBottom: 12,
+  },
+  vehicleCardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 6,
+  },
+  vehicleCardSubtitle: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
   },
 
-  // Raw
-  rawText: {
-    color: '#888',
-    fontSize: 13,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  // Tab content wrapper
+  tabContent: {
+    paddingHorizontal: 20,
   },
 
   // Bottom bar
@@ -1074,8 +767,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
   },
-
-  // Shared
   btnDisabled: {
     opacity: 0.4,
   },

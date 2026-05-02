@@ -51,3 +51,26 @@ export const searchCarImage = async (carModel: string): Promise<string | null> =
     return null;
   }
 };
+export const scanVin = async (vin: string): Promise<{ model: string | null; make: string | null; modelYear: string | null } | null> => {
+  try {
+    const url = `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/${encodeURIComponent(vin)}?format=json`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error('scanVin non-OK response', { status: response.status, statusText: response.statusText, url });
+      return null;
+    }
+    const data = await response.json();
+    const results = Array.isArray(data?.Results) ? data.Results : [];
+    const model = results.find((result: any) => result?.Variable === 'Model')?.Value ?? null;
+    const make = results.find((result: any) => result?.Variable === 'Make')?.Value ?? null;
+    const modelYear = results.find((result: any) => result?.Variable === 'Model Year')?.Value ?? null;
+    return {
+      model,
+      make,
+      modelYear,
+    };
+  } catch (error) {
+    console.error('scanVin failed:', error);
+    return null;
+  }
+};

@@ -100,7 +100,7 @@ const ProfileEditScreen: React.FC = () => {
                 size={100}
               />
               <View style={styles.cameraIcon}>
-                <Text style={styles.cameraIconText}>📷</Text>
+                <Text style={styles.cameraIconText}>+</Text>
               </View>
             </TouchableOpacity>
 

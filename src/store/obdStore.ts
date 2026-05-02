@@ -9,6 +9,10 @@ interface ObdState {
   // Connection
   obdHost: string;
   obdPort: string;
+  bleDeviceId: string;
+  bleServiceUUID: string;
+  bleRxCharUUID: string;
+  bleTxCharUUID: string;
   obdConnected: boolean;
   obdConnecting: boolean;
   obdLastResponse: string;
@@ -50,6 +54,10 @@ interface ObdState {
   // Actions
   setObdHost: (host: string) => void;
   setObdPort: (port: string) => void;
+  setBleDeviceId: (id: string) => void;
+  setBleServiceUUID: (uuid: string) => void;
+  setBleRxCharUUID: (uuid: string) => void;
+  setBleTxCharUUID: (uuid: string) => void;
   setObdConnected: (connected: boolean) => void;
   setObdConnecting: (connecting: boolean) => void;
   setObdLastResponse: (response: string) => void;
@@ -87,6 +95,10 @@ export const useObdStore = create<ObdState>((set) => ({
   // Initial state
   obdHost: '192.168.0.10',
   obdPort: '35000',
+  bleDeviceId: '',
+  bleServiceUUID: 'FFE0',
+  bleRxCharUUID: 'FFE1',
+  bleTxCharUUID: 'FFE1',
   obdConnected: false,
   obdConnecting: false,
   obdLastResponse: '',
@@ -121,6 +133,10 @@ export const useObdStore = create<ObdState>((set) => ({
   // Actions
   setObdHost: (host) => set({ obdHost: host }),
   setObdPort: (port) => set({ obdPort: port }),
+  setBleDeviceId: (id) => set({ bleDeviceId: id }),
+  setBleServiceUUID: (uuid) => set({ bleServiceUUID: uuid }),
+  setBleRxCharUUID: (uuid) => set({ bleRxCharUUID: uuid }),
+  setBleTxCharUUID: (uuid) => set({ bleTxCharUUID: uuid }),
   setObdConnected: (connected) => set({ obdConnected: connected }),
   setObdConnecting: (connecting) => set({ obdConnecting: connecting }),
   setObdLastResponse: (response) => set({ obdLastResponse: response }),

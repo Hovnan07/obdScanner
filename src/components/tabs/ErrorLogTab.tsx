@@ -43,7 +43,7 @@ const ErrorLogTab: React.FC<ErrorLogTabProps> = ({
           </ScrollView>
         ) : (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>✅</Text>
+            <Text style={styles.emptyEmoji}>◎</Text>
             <Text style={styles.emptyText}>
               {obdConnected
                 ? 'No error codes found. Tap Diagnostic to scan.'
